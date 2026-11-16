@@ -21,11 +21,11 @@
 
 static void
 *hls_get_current_video(raop_t *raop) {
-    if (raop->current_video < 0) {
+    if (raop->current_video < 0 || raop->current_video >= MAX_AIRPLAY_VIDEO ||
+        !raop->airplay_video[raop->current_video]) {
         logger_log(raop->logger, LOGGER_ERR, "hls_get_current_video: failed to identify current_playlist");
         return NULL;
     }
-    assert(raop->airplay_video[raop->current_video]);
     return (void *) raop->airplay_video[raop->current_video];
 }
 
@@ -200,7 +200,11 @@ http_handler_set_property(raop_conn_t *conn,
     */
 
     airplay_video_t *airplay_video = (airplay_video_t *) hls_get_current_video(raop);
-    assert(airplay_video);
+    if (!airplay_video) {
+        http_response_init(response, "HTTP/1.1", 400, "Bad Request");
+        http_response_add_header(response, "Content-Length", "0");
+        return;
+    }
     if (!strcmp(property, "selectedMediaArray")) {
         /* verify that this request contains a binary plist*/
         char *header_str = NULL;
@@ -489,7 +493,11 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
 
     raop_t *raop = conn->raop;
     airplay_video_t *airplay_video = (airplay_video_t *) hls_get_current_video(raop);
-    assert(airplay_video);
+    if (!airplay_video) {
+        http_response_init(response, "HTTP/1.1", 400, "Bad Request");
+        http_response_add_header(response, "Content-Length", "0");
+        return;
+    }
     bool data_is_plist = false;
     plist_t req_root_node = NULL;
     uint64_t uint_val = 0;
@@ -982,6 +990,7 @@ http_handler_hls(raop_conn_t *conn,  http_request_t *request, http_response_t *r
     if (raop->current_video == -1) {
         logger_log(raop->logger, LOGGER_ERR,"airplay_video playlist  not found");
         http_response_init(response, "HTTP/1.1", 404, "Not Found");
+        http_response_add_header(response, "Content-Length", "0");
         return;
     }
     const char *method = http_request_get_method(request);
@@ -998,7 +1007,11 @@ http_handler_hls(raop_conn_t *conn,  http_request_t *request, http_response_t *r
         return;
     }
     airplay_video_t *airplay_video = (airplay_video_t *) hls_get_current_video(raop);
-    assert(airplay_video);
+    if (!airplay_video) {
+        http_response_init(response, "HTTP/1.1", 400, "Bad Request");
+        http_response_add_header(response, "Content-Length", "0");
+        return;
+    }
     if (!strcmp(url, "/master.m3u8")){
         char * master_playlist  = get_master_playlist(airplay_video);
         if (master_playlist) {
